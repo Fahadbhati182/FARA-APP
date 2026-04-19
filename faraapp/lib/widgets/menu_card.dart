@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
+import '../services/api_service.dart';
 
-class MenuCard extends StatelessWidget {
+class MenuCard extends StatefulWidget {
   final String image;
   final String title;
   final String subtitle;
   final double price;
   final bool highlight;
+  final String? foodId;
+  final bool initialIsFavorite;
 
   const MenuCard({
     super.key,
@@ -17,13 +20,66 @@ class MenuCard extends StatelessWidget {
     required this.subtitle,
     required this.price,
     this.highlight = false,
+    this.foodId,
+    this.initialIsFavorite = false,
   });
+
+  @override
+  State<MenuCard> createState() => _MenuCardState();
+}
+
+class _MenuCardState extends State<MenuCard> {
+  late bool _isFavorite;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = widget.initialIsFavorite;
+  }
+
+  @override
+  void didUpdateWidget(MenuCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialIsFavorite != widget.initialIsFavorite) {
+      _isFavorite = widget.initialIsFavorite;
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (widget.foodId == null || _loading) return;
+
+    setState(() {
+      _isFavorite = !_isFavorite;
+      _loading = true;
+    });
+
+    try {
+      final result = await ApiService.toggleFavorite(widget.foodId!);
+      if (mounted) {
+        setState(() {
+          _isFavorite = result;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFavorite = !_isFavorite;
+          _loading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${e.toString()}")),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<CartProvider>(
       builder: (context, cart, _) {
-        final quantity = cart.getQuantity(title);
+        final quantity = cart.getQuantity(widget.title);
         final inCart = quantity > 0;
 
         return AnimatedContainer(
@@ -33,15 +89,15 @@ class MenuCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: highlight
+            border: widget.highlight
                 ? Border.all(color: AppColors.primary, width: 2)
                 : Border.all(color: Colors.transparent, width: 2),
             boxShadow: [
               BoxShadow(
-                color: highlight
+                color: widget.highlight
                     ? AppColors.primary.withOpacity(0.15)
                     : Colors.grey.shade200,
-                blurRadius: highlight ? 16 : 8,
+                blurRadius: widget.highlight ? 16 : 8,
                 spreadRadius: 2,
               ),
             ],
@@ -50,24 +106,47 @@ class MenuCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Food Image ────────────────────────────────────
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  image,
-                  height: 85,
-                  width: 85,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 85,
-                    width: 85,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(Icons.fastfood_rounded,
-                        color: Colors.grey.shade400, size: 32),
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: widget.image.startsWith('http')
+                        ? Image.network(
+                            widget.image,
+                            height: 85,
+                            width: 85,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _errorImage(),
+                          )
+                        : Image.asset(
+                            widget.image,
+                            height: 85,
+                            width: 85,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _errorImage(),
+                          ),
                   ),
-                ),
+                  if (widget.foodId != null)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: _toggleFavorite,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.8),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _isFavorite ? Icons.favorite : Icons.favorite_border,
+                            color: _isFavorite ? Colors.red : Colors.grey,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
 
               const SizedBox(width: 12),
@@ -78,7 +157,7 @@ class MenuCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      widget.title,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -89,7 +168,7 @@ class MenuCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      subtitle,
+                      widget.subtitle,
                       style: TextStyle(
                         color: Colors.grey.shade500,
                         fontSize: 12,
@@ -102,7 +181,7 @@ class MenuCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "₹ ${price.toStringAsFixed(0)}",
+                          "₹ ${widget.price.toStringAsFixed(0)}",
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
@@ -117,15 +196,15 @@ class MenuCard extends StatelessWidget {
                               ScaleTransition(scale: anim, child: child),
                           child: inCart
                               ? _QuantityControl(
-                            key: ValueKey("qty_$title"),
-                            quantity: quantity,
-                            onAdd: () => cart.addItem(title, price),
-                            onRemove: () => cart.removeItem(title),
-                          )
+                                  key: ValueKey("qty_${widget.title}"),
+                                  quantity: quantity,
+                                  onAdd: () => cart.addItem(widget.title, widget.price),
+                                  onRemove: () => cart.removeItem(widget.title),
+                                )
                               : _AddButton(
-                            key: ValueKey("add_$title"),
-                            onTap: () => cart.addItem(title, price),
-                          ),
+                                  key: ValueKey("add_${widget.title}"),
+                                  onTap: () => cart.addItem(widget.title, widget.price),
+                                ),
                         ),
                       ],
                     ),
@@ -138,9 +217,20 @@ class MenuCard extends StatelessWidget {
       },
     );
   }
+
+  Widget _errorImage() {
+    return Container(
+      height: 85,
+      width: 85,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(Icons.fastfood_rounded, color: Colors.grey.shade400, size: 32),
+    );
+  }
 }
 
-// ── Add Button ───────────────────────────────────────────────────────────────
 class _AddButton extends StatelessWidget {
   final VoidCallback onTap;
   const _AddButton({super.key, required this.onTap});
@@ -169,7 +259,6 @@ class _AddButton extends StatelessWidget {
   }
 }
 
-// ── Quantity Control (+  qty  -) ─────────────────────────────────────────────
 class _QuantityControl extends StatelessWidget {
   final int quantity;
   final VoidCallback onAdd;

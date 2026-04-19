@@ -5,6 +5,7 @@ import 'change_password_screen.dart';
 import '../main.dart';
 import '../owner/owner_main_navigation.dart';
 import '../worker/worker_main_navigation.dart';
+import 'forgot_password_screen.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -132,111 +133,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showForgotPasswordSheet() {
-    final resetEmailController =
-    TextEditingController(text: emailController.text.trim());
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: lightOrange,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.lock_reset_rounded,
-                    color: primaryOrange, size: 28),
-              ),
-              const SizedBox(height: 16),
-              const Text("Forgot Password?",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text("Enter your email and we'll send you a reset link.",
-                  style: TextStyle(color: Colors.grey, fontSize: 14)),
-              const SizedBox(height: 24),
-              TextFormField(
-                controller: resetEmailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  hintText: "you@example.com",
-                  prefixIcon: Icon(Icons.email_outlined,
-                      color: Colors.grey.shade400, size: 20),
-                  filled: true,
-                  fillColor: const Color(0xFFF8F8F8),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide:
-                      BorderSide(color: Colors.grey.shade200, width: 1)),
-                  focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide:
-                      const BorderSide(color: primaryOrange, width: 1.5)),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryOrange,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: () async {
-                    final email = resetEmailController.text.trim();
-                    if (email.isEmpty) return;
-                    Navigator.pop(context);
-                    try {
-                      await ApiService.sendPasswordReset(email);
-                      if (!mounted) return;
-                      _showResetEmailSentDialog(email);
-                    } catch (e) {
-                      if (!mounted) return;
-                      _showErrorSnackbar(e.toString().replaceAll("Exception: ", ""));
-                    }
-                  },
-                  child: const Text("Send Reset Link",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
     );
   }
 

@@ -614,6 +614,79 @@ class ApiService {
     }
   }
 
+  /// Reset Password with OTP
+  static Future<void> resetPassword(String email, String otp, String newPassword) async {
+    final url = Uri.parse('$baseUrl/auth/reset-password');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'otp': otp,
+        'newPassword': newPassword,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to reset password');
+    }
+  }
+
+  /// Send Verify Email OTP
+  static Future<void> sendVerifyEmailOTP() async {
+    final url = Uri.parse('$baseUrl/auth/send-verify-otp');
+    final response = await http.get(
+      url,
+      headers: await _headers(),
+    );
+
+    if (response.statusCode != 200) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to send verification OTP');
+    }
+  }
+
+  /// Verify Email OTP
+  static Future<void> verifyEmailOTP(String otp) async {
+    final url = Uri.parse('$baseUrl/auth/verify-otp');
+    final response = await http.post(
+      url,
+      headers: await _headers(),
+      body: jsonEncode({'otp': otp}),
+    );
+
+    if (response.statusCode != 200) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to verify email');
+    }
+  }
+
+  /// toggleFavorite
+  static Future<bool> toggleFavorite(String foodId) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/auth/toggle-favorite/$foodId"),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['message'].toString().toLowerCase().contains('added');
+    }
+    throw Exception(jsonDecode(response.body)['message'] ?? "Toggle favorite failed");
+  }
+
+
+  /// getFavorites
+  static Future<List<dynamic>> getFavorites() async {
+    final url = Uri.parse('$baseUrl/auth/favorites');
+    final response = await http.get(url, headers: await _headers());
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return json['data'] ?? [];
+    }
+    throw Exception('Failed to load favorites');
+  }
+
   /// getAllOutlets
   static Future<List<dynamic>> getAllOutlets() async {
     final url = Uri.parse('$baseUrl/outlets/all');

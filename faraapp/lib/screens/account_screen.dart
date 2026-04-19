@@ -7,6 +7,7 @@ import '../constants/colors.dart';
 import '../screens/role_selection_screen.dart';
 import '../services/api_service.dart';
 import 'my_orders_screen.dart';
+import 'verify_email_screen.dart';
 
 // ─────────────────────────────────────────────
 //  MAIN ACCOUNT SCREEN
@@ -74,72 +75,124 @@ class _AccountScreenState extends State<AccountScreen> {
     return SafeArea(
       child: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            ListTile(
-              leading: CircleAvatar(
-                radius: 30,
-                backgroundImage: avatarUrl != null
-                    ? NetworkImage(avatarUrl)
-                    : const AssetImage("assets/profile.jpg")
-                as ImageProvider,
-              ),
-              title: Text(
-                name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(email.isNotEmpty ? email : 'No email set'),
-              trailing: GestureDetector(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EditProfileScreen(profile: _profile),
-                    ),
-                  );
-                  _loadProfile(); // refresh after edit
-                },
-                child: const Text(
-                  "Edit",
-                  style: TextStyle(color: AppColors.primary),
+          : RefreshIndicator(
+              onRefresh: _loadProfile,
+              color: AppColors.primary,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: CircleAvatar(
+                          radius: 30,
+                          backgroundImage: avatarUrl != null && avatarUrl.startsWith('http')
+                              ? NetworkImage(avatarUrl)
+                              : const AssetImage("assets/profile.jpg") as ImageProvider,
+                        ),
+                        title: Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Row(
+                          children: [
+                            Text(email.isNotEmpty ? email : 'No email set'),
+                            const SizedBox(width: 6),
+                            if (_profile?['isVerified'] == true)
+                              const Icon(Icons.verified, color: Colors.blue, size: 14)
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  "UNVERIFIED",
+                                  style: TextStyle(color: Colors.red, fontSize: 8, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
+                        trailing: GestureDetector(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditProfileScreen(profile: _profile),
+                              ),
+                            );
+                            _loadProfile(); // refresh after edit
+                          },
+                          child: const Text(
+                            "Edit",
+                            style: TextStyle(color: AppColors.primary),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      if (_profile?['isVerified'] == false)
+                        Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          color: Colors.red.shade50,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                            title: const Text("Verify your email", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: const Text("Keep your account secure", style: TextStyle(fontSize: 12)),
+                            trailing: TextButton(
+                              onPressed: () async {
+                                await ApiService.sendVerifyEmailOTP();
+                                if (!mounted) return;
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => VerifyEmailScreen(
+                                      email: email,
+                                      onVerified: () => _loadProfile(),
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Text("VERIFY"),
+                            ),
+                          ),
+                        ),
+
+                      _tile("My Orders", Icons.shopping_bag, () {
+                        Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const MyOrdersScreen()));
+                      }),
+                      _tile("Delivery Addresses", Icons.location_on, () {
+                        Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const DeliveryAddressesScreen()));
+                      }),
+                      _tile("Support", Icons.support_agent, () {
+                        Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const SupportScreen()));
+                      }),
+                      _tile("Notifications", Icons.notifications, () {
+                        Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+                      }),
+
+                      const SizedBox(height: 40),
+
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          minimumSize: const Size(double.infinity, 50),
+                        ),
+                        onPressed: () => _logout(context),
+                        child: const Text("Log Out",style: TextStyle(color: Colors.white),),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            _tile("My Orders", Icons.shopping_bag, () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const MyOrdersScreen()));
-            }),
-            _tile("Delivery Addresses", Icons.location_on, () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const DeliveryAddressesScreen()));
-            }),
-            _tile("Support", Icons.support_agent, () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SupportScreen()));
-            }),
-            _tile("Notifications", Icons.notifications, () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-            }),
-
-            const Spacer(),
-
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              onPressed: () => _logout(context),
-              child: const Text("Log Out",style: TextStyle(color: Colors.white),),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

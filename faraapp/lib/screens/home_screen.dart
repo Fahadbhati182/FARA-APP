@@ -11,6 +11,7 @@ import '../screens/cart_page.dart';
 import '../providers/cart_provider.dart';
 import '../services/api_service.dart';
 import 'food_detail_screen.dart';
+import 'verify_email_screen.dart';
 
 // ── Banner Model ─────────────────────────────────────────────────────────────
 class _BannerItem {
@@ -19,6 +20,7 @@ class _BannerItem {
   final String tag;
   final String? categoryFilter;
   final String? scrollToItem;
+  final bool isNetworkImage;
 
   const _BannerItem({
     required this.image,
@@ -26,10 +28,11 @@ class _BannerItem {
     required this.tag,
     this.categoryFilter,
     this.scrollToItem,
+    this.isNetworkImage = false,
   });
 }
 
-const List<_BannerItem> _banners = [
+const List<_BannerItem> _defaultBanners = [
   _BannerItem(
     image: "assets/momo_banner.jpg",
     label: "Steamed Chicken Momos",
@@ -64,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late PageController _bannerController;
   int _currentBanner = 0;
   Timer? _bannerTimer;
+  List<_BannerItem> _banners = _defaultBanners;
 
   // ── Location State ─────────────────────────────────────────────────────────
   String _locationTitle = "Fetching location...";
@@ -71,9 +75,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _locationLoading = true;
 
   List<dynamic> _popularFoods = [];
+  List<dynamic> _favorites = [];
   List<dynamic> _outlets = [];
   bool _outletsLoading = true;
   bool _foodsLoading = true;
+  bool _favoritesLoading = true;
 
   @override
   void initState() {
@@ -83,6 +89,39 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchLocation();
     _fetchPopularFoods();
     _fetchOutlets();
+    _fetchProfile();
+    _fetchFavorites();
+  }
+
+  Map<String, dynamic>? _userProfile;
+  bool _profileLoading = true;
+
+  Future<void> _fetchProfile() async {
+    try {
+      final res = await ApiService.getProfile();
+      if (mounted) {
+        setState(() {
+          _userProfile = res['data'] ?? res;
+          _profileLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _profileLoading = false);
+    }
+  }
+
+  Future<void> _fetchFavorites() async {
+    try {
+      final res = await ApiService.getFavorites();
+      if (mounted) {
+        setState(() {
+          _favorites = res;
+          _favoritesLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _favoritesLoading = false);
+    }
   }
 
   Future<void> _fetchOutlets() async {
@@ -100,12 +139,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchPopularFoods() async {
-
     try {
       final data = await ApiService.getAllFoods();
       if (mounted) {
         setState(() {
-          _popularFoods = data.where((item) => item['isBestSeller'] == true && item['isAvailable'] == true).toList();
+          final bestSellers = data.where((item) => item['isBestSeller'] == true && item['isAvailable'] == true).toList();
+          _popularFoods = bestSellers;
+          
+          if (bestSellers.isNotEmpty) {
+            _banners = bestSellers.take(3).map((food) {
+              return _BannerItem(
+                image: (food['image'] != null && food['image'].toString().isNotEmpty) 
+                    ? food['image'] 
+                    : "assets/momo_banner.jpg",
+                label: food['name'] ?? '',
+                tag: food['isVeg'] == true ? "🌿 Pure Veg" : "🔥 Best Seller",
+                categoryFilter: food['category']?.toString().toLowerCase(),
+                scrollToItem: food['name'],
+                isNetworkImage: (food['image'] != null && food['image'].toString().startsWith('http')),
+              );
+            }).toList();
+            
+            // Add a default one if only 1-2 bestsellers
+            if (_banners.length < 3 && _banners.isNotEmpty) {
+               _banners.add(_defaultBanners.last);
+            }
+          }
+          
           _foodsLoading = false;
         });
       }
@@ -245,6 +305,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!_profileLoading && _userProfile != null && _userProfile!['isVerified'] == false)
+                _buildVerificationBanner(),
 
               // ── Location + Cart ─────────────────────────────────
               Row(
@@ -349,8 +411,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
+              if (!_favoritesLoading && _favorites.isNotEmpty)
+                _buildFavoritesSection(),
 
-              // ── Auto-Sliding Banner ─────────────────────────────
+              const SizedBox(height: 20),
               SizedBox(
                 height: 180,
                 child: PageView.builder(
@@ -370,16 +434,27 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.asset(
-                                b.image,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(16),
+                              child: b.isNetworkImage 
+                                ? Image.network(
+                                    b.image,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                  )
+                                : Image.asset(
+                                    b.image,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
                             ),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(16),
@@ -572,6 +647,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: food['name'] ?? '',
                                 subtitle: food['description'] ?? '',
                                 price: (food['price'] ?? 0).toDouble(),
+                                foodId: food['_id'] ?? food['id'],
+                                initialIsFavorite: _favorites.any((f) => (f['_id'] ?? f['id']) == (food['_id'] ?? food['id'])),
                               ),
                             )).toList(),
                           ],
@@ -585,6 +662,68 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
+
+  Widget _buildFavoritesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Your Favorites 💖",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 160,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _favorites.length,
+            itemBuilder: (context, index) {
+              final item = _favorites[index];
+              return Container(
+                width: 140,
+                margin: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FoodDetailScreen(food: item),
+                      ),
+                    );
+                    _fetchFavorites(); // Refresh in case they un-favorited
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: item['image'] != null && item['image'].isNotEmpty
+                            ? (item['image'].startsWith('http')
+                                ? Image.network(item['image'], height: 100, width: 140, fit: BoxFit.cover)
+                                : Image.asset(item['image'], height: 100, width: 140, fit: BoxFit.cover))
+                            : Container(color: Colors.grey.shade200, height: 100, width: 140),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item['name'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        "₹${item['price']}",
+                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildOutletSelector() {
     return Column(
@@ -660,6 +799,82 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
       ],
+    );
+  }
+
+  Widget _buildVerificationBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF9A7B), Color(0xFFFF6B2C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF6B2C).withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.email_outlined, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  "Verify Your Email",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                Text(
+                  "Verify your email to secure your account.",
+                  style: TextStyle(color: Colors.white, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFFFF6B2C),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              minimumSize: const Size(0, 32),
+            ),
+            onPressed: () async {
+              await ApiService.sendVerifyEmailOTP();
+              if (!mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => VerifyEmailScreen(
+                    email: _userProfile!['email'],
+                    onVerified: () {
+                      _fetchProfile(); // Refresh profile after verification
+                    },
+                  ),
+                ),
+              );
+            },
+            child: const Text("Verify", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 }

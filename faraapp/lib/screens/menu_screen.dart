@@ -27,6 +27,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   bool _loading = true;
   List<Food> _fetchedFoods = [];
+  List<String> _favoriteIds = [];
 
   final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _itemKeys = {};
@@ -49,6 +50,7 @@ class _MenuScreenState extends State<MenuScreen> {
               // Usually customers only see available food
               .where((item) => item['isAvailable'] == true) 
               .map((item) => Food(
+                    id: item['_id'] ?? item['id'],
                     name: item['name'] ?? '',
                     description: item['description'] ?? '',
                     price: (item['price'] ?? 0).toDouble(),
@@ -67,6 +69,18 @@ class _MenuScreenState extends State<MenuScreen> {
             _scrollToItem(widget.scrollToItem!);
           });
         }
+      }
+      
+      // Fetch favorites
+      try {
+        final favorites = await ApiService.getFavorites();
+        if (mounted) {
+          setState(() {
+            _favoriteIds = favorites.map((f) => f['_id'].toString()).toList();
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetching favorites: $e');
       }
     } catch (e) {
       debugPrint('Error fetching menu: $e');
@@ -275,6 +289,8 @@ class _MenuScreenState extends State<MenuScreen> {
                       MaterialPageRoute(
                         builder: (_) => FoodDetailScreen(
                           food: {
+                            'id': originalItem.id,
+                            '_id': originalItem.id,
                             'name': originalItem.name,
                             'description': originalItem.description,
                             'price': originalItem.price,
@@ -296,6 +312,8 @@ class _MenuScreenState extends State<MenuScreen> {
                     subtitle: food.description,
                     price: food.price,
                     highlight: food.name == widget.scrollToItem,
+                    foodId: food.id,
+                    initialIsFavorite: _favoriteIds.contains(food.id),
                   ),
                 );
               },

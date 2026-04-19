@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../owner/owner_create_update_food_screen.dart';
+import '../services/api_service.dart';
 
-class FoodDetailScreen extends StatelessWidget {
+class FoodDetailScreen extends StatefulWidget {
   final Map<String, dynamic> food;
   final bool isAdmin;
 
@@ -11,13 +12,84 @@ class FoodDetailScreen extends StatelessWidget {
     this.isAdmin = false,
   });
 
+  @override
+  State<FoodDetailScreen> createState() => _FoodDetailScreenState();
+}
+
+class _FoodDetailScreenState extends State<FoodDetailScreen> {
   static const Color primaryOrange = Color(0xFFFF6B2C);
   static const Color lightOrange = Color(0xFFFFF3EE);
 
+  bool _isFavorite = false;
+  bool _loadingFavorite = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfFavorite();
+  }
+
+  Future<void> _checkIfFavorite() async {
+    try {
+      final profileResponse = await ApiService.getProfile();
+      final user = profileResponse['data'] ?? profileResponse;
+      final favorites = user['favorites'] as List? ?? [];
+      
+      final Map<String, dynamic> raw = _extractRawData(widget.food);
+      final foodId = raw['_id'] ?? raw['id'];
+
+      if (mounted) {
+        setState(() {
+          _isFavorite = favorites.any((f) => (f is String ? f : f['_id']) == foodId);
+          _loadingFavorite = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingFavorite = false);
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final Map<String, dynamic> raw = _extractRawData(widget.food);
+    final foodId = raw['_id'] ?? raw['id'];
+
+    if (foodId == null) return;
+
+    // Optimistic update
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
+
+    try {
+      final result = await ApiService.toggleFavorite(foodId);
+      if (mounted) {
+        setState(() {
+          _isFavorite = result;
+        });
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          _isFavorite = !_isFavorite;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${e.toString()}")),
+        );
+      }
+    }
+  }
+
+  Map<String, dynamic> _extractRawData(dynamic foodData) {
+    if (foodData is Map<String, dynamic>) {
+      return foodData['raw_data'] ?? foodData;
+    }
+    return {};
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Determine the raw data - handling both Map and Model if necessary
-    final Map<String, dynamic> raw = _extractRawData(food);
+    final Map<String, dynamic> raw = _extractRawData(widget.food);
     
     final String name = raw['name'] ?? 'Item';
     final String description = raw['description'] ?? 'No description provided.';
@@ -31,9 +103,6 @@ class FoodDetailScreen extends StatelessWidget {
     final int prepTime = raw['prepTime'] ?? 15;
     final int cookTime = raw['cookTime'] ?? 15;
     
-    final double profit = price - costPrice;
-    final double margin = price > 0 ? (profit / price * 100) : 0.0;
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
@@ -50,7 +119,6 @@ class FoodDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,24 +128,15 @@ class FoodDetailScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 20),
-
-                    // Badges Row
                     _buildBadges(isBestSeller, isVeg, isAvailable),
                     const SizedBox(height: 32),
-
-                    // Stats Row
                     _buildStatsRow(prepTime, cookTime),
                     const SizedBox(height: 32),
-
-                    // Description Section
                     const Text("Description", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
                     const SizedBox(height: 12),
                     Text(description, style: TextStyle(fontSize: 15, color: Colors.grey.shade700, height: 1.6, letterSpacing: 0.3)),
                     const SizedBox(height: 32),
-
-                    // Business Secrets Section (Admin Only)
-                    if (isAdmin) _buildAdminSection(context, costPrice, profit, margin),
-                    
+                    if (widget.isAdmin) _buildAdminSection(context, costPrice, price - costPrice, price > 0 ? ((price - costPrice) / price * 100) : 0.0),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -87,14 +146,6 @@ class FoodDetailScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Map<String, dynamic> _extractRawData(dynamic foodData) {
-    if (foodData is Map<String, dynamic>) {
-      return foodData['raw_data'] ?? foodData;
-    }
-    // Handle other types if needed, but for now we expect a Map
-    return {};
   }
 
   Widget _buildTitleSection(String name, String category) {
@@ -175,7 +226,7 @@ class FoodDetailScreen extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => OwnerCreateUpdateFoodScreen(food: food)),
+                MaterialPageRoute(builder: (_) => OwnerCreateUpdateFoodScreen(food: widget.food)),
               );
             },
             icon: const Icon(Icons.edit_note_rounded, color: Colors.white),
@@ -233,6 +284,24 @@ class FoodDetailScreen extends StatelessWidget {
           ),
         ),
       ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: CircleAvatar(
+            backgroundColor: Colors.white,
+            child: _loadingFavorite 
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: primaryOrange))
+              : IconButton(
+                  icon: Icon(
+                    _isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: _isFavorite ? Colors.red : Colors.black,
+                    size: 22,
+                  ),
+                  onPressed: _toggleFavorite,
+                ),
+          ),
+        ),
+      ],
     );
   }
 
