@@ -10,6 +10,8 @@ import {
   sendVerifyEmailOTP,
   verifyEmailOTP,
   changePassword,
+  getFavorites,
+  toggleFavorite,
 } from "../controllers/auth.controller.js";
 import authUser from "../middleware/authUser.js";
 import { body } from "express-validator";
@@ -37,9 +39,11 @@ userRouter.get("/is-authenticated", authUser, isAuthenticated)
 userRouter.get("/logout", logoutUser);
 userRouter.get("/send-verify-otp", authUser, sendVerifyEmailOTP);
 userRouter.post("/verify-otp", authUser, verifyEmailOTP);
-userRouter.post("/send-reset-password-otp", authUser, sendResetPasswordOTP);
-userRouter.post("/reset-password", authUser, resetPassword);
+userRouter.post("/send-reset-password-otp", sendResetPasswordOTP);
+userRouter.post("/reset-password", resetPassword);
 userRouter.patch("/change-password", authUser, changePassword);
+userRouter.get("/favorites", authUser, getFavorites);
+userRouter.post("/toggle-favorite/:foodId", authUser, toggleFavorite);
 
 
 export default userRouter;

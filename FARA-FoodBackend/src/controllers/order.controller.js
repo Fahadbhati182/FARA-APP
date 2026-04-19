@@ -147,13 +147,13 @@ export const updateOrderStatus = AsynHandler(async (req, res) => {
     );
   }
 
-  if (status) {
-    // When a worker accepts a pending order, assign their ID and check outlet assignment
-    if (status === "accepted" && !order.worker_id) {
-      order.worker_id = userId;
+    if (status) {
+      // When a worker accepts a pending order, assign their ID and check outlet assignment
+      if (status === "accepted" && !order.worker_id) {
+        order.worker_id = userId;
+      }
+      order.status = status;
     }
-    order.status = status;
-  }
   if (ready_time) order.ready_time = ready_time;
   if (payment_2 !== undefined) order.payment_2 = payment_2;
   if (payment_2_at) order.payment_2_at = payment_2_at;

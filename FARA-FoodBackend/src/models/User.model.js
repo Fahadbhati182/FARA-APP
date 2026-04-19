@@ -88,7 +88,13 @@ const userSchema = new mongoose.Schema(
     },
     defaultAddressId: {
       type: mongoose.Schema.Types.ObjectId,
-    }
+    },
+    favorites: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Food",
+      },
+    ],
   },
   {
     timestamps: true,

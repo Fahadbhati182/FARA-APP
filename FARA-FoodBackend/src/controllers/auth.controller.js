@@ -294,3 +294,40 @@ export const changePassword = AsynHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, "Password changed successfully", null));
 });
+
+export const toggleFavorite = AsynHandler(async (req, res) => {
+  const { foodId } = req.params;
+  const { userId } = req.user;
+
+  if (!foodId) {
+    throw new ApiError(400, "Food ID is required");
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const index = user.favorites.indexOf(foodId);
+  if (index === -1) {
+    user.favorites.push(foodId);
+    await user.save();
+    return res.status(200).json(new ApiResponse(200, "Added to favorites", { isFavorite: true }));
+  } else {
+    user.favorites.splice(index, 1);
+    await user.save();
+    return res.status(200).json(new ApiResponse(200, "Removed from favorites", { isFavorite: false }));
+  }
+});
+
+export const getFavorites = AsynHandler(async (req, res) => {
+  const { userId } = req.user;
+
+  const user = await User.findById(userId).populate("favorites");
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  res.status(200).json(new ApiResponse(200, "Favorites fetched successfully", user.favorites));
+});
+
