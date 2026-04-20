@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   // Use 10.0.2.2 for Android emulators pointing to local machine,
   // or localhost for Chrome/Windows desktop.
-  static const String baseUrl = 'http://localhost:5000/api'; 
-  // static const String baseUrl = 'http://192.168.0.102:5000/api'; 
+  // static const String baseUrl = 'https://fara-foodbackend.onrender.com/api'; 
+  static const String baseUrl = 'http://localhost:3001/api'; 
   
   static const String tokenKey = 'jwt_token';
 
@@ -60,7 +60,7 @@ class ApiService {
   /// getAdminDashboardStats
   static Future<Map<String, dynamic>> getAdminDashboardStats() async {
     final url = Uri.parse('$baseUrl/admin/dashboard-stats');
-    final response = await http.get(url, headers: await _headers());
+    final response = await http.get(url, headers: await _headers()).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
@@ -71,7 +71,7 @@ class ApiService {
   /// getAdminAllOrders
   static Future<Map<String, dynamic>> getAdminAllOrders() async {
     final url = Uri.parse('$baseUrl/admin/all-orders');
-    final response = await http.get(url, headers: await _headers());
+    final response = await http.get(url, headers: await _headers()).timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
@@ -400,6 +400,22 @@ class ApiService {
     } else {
       final error = jsonDecode(response.body);
       throw Exception(error['message'] ?? 'Failed to update order status');
+    }
+  }
+
+  /// processOrderRefund
+  static Future<Map<String, dynamic>> processOrderRefund(String id) async {
+    final url = Uri.parse('$baseUrl/orders/refund/$id');
+    final response = await http.patch(
+      url,
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to process refund');
     }
   }
 
@@ -876,6 +892,22 @@ class ApiService {
     } else {
       final error = jsonDecode(response.body);
       throw Exception(error['message'] ?? 'Failed to check payment status');
+    }
+  }
+
+  /// resendPickupCode
+  static Future<Map<String, dynamic>> resendPickupCode(String orderId) async {
+    final url = Uri.parse('$baseUrl/orders/resend-code/$orderId');
+    final response = await http.post(
+      url,
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to resend pickup code');
     }
   }
 }

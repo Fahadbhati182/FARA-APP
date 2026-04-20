@@ -147,10 +147,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
             ),
             const SizedBox(height: 12),
             Text(
-              "Sorry, the stall worker was unable to accept your order at this time. Your advance payment will be refunded.",
+              _order?['rejection_reason'] != null 
+                ? "Reason: ${_order!['rejection_reason']}"
+                : "Sorry, the stall worker was unable to accept your order at this time. Your advance payment will be refunded.",
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.grey.shade500, fontSize: 14, height: 1.5),
+                  color: _order?['rejection_reason'] != null ? Colors.redAccent : Colors.grey.shade500, 
+                  fontSize: 14, 
+                  height: 1.5,
+                  fontWeight: _order?['rejection_reason'] != null ? FontWeight.w600 : FontWeight.normal
+              ),
             ),
             const SizedBox(height: 12),
             Container(

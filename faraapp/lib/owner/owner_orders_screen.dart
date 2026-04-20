@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/loading_button.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class OwnerOrdersScreen extends StatefulWidget {
   const OwnerOrdersScreen({super.key});
@@ -56,6 +58,61 @@ class _OwnerOrdersScreenState extends State<OwnerOrdersScreen>
       debugPrint('Orders load error: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _handleRefund(Map<String, dynamic> order) async {
+    final orderId = order['_id'];
+    final isRazorpay = order['razorpay_payment_id'] != null;
+    final refundAmount = (order['refund_amount'] ?? 0).toDouble();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isRazorpay ? "Process Razorpay Refund" : "Mark as Refunded"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Are you sure you want to refund ₹${refundAmount.toStringAsFixed(0)}?"),
+            const SizedBox(height: 12),
+            if (isRazorpay)
+              const Text("This will automatically reverse the transaction through Razorpay.", style: TextStyle(fontSize: 12, color: Colors.grey))
+            else
+              const Text("This will mark the order as refunded in the system. Make sure you have manually paid the customer.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
+            child: const Text("Confirm Refund", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.processOrderRefund(orderId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Refund processed successfully"), backgroundColor: Colors.green),
+        );
+        _loadOrders();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Refund failed: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _callCustomer(String? phone) async {
+    if (phone == null || phone.isEmpty) return;
+    final url = Uri.parse("tel:$phone");
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
     }
   }
 
@@ -287,18 +344,100 @@ class _OwnerOrdersScreenState extends State<OwnerOrdersScreen>
                     ],
                   ),
                   subtitle: Text(itemSummary),
-                  trailing: Text("₹${order['total']?.toStringAsFixed(0) ?? '0'}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: Text("₹${(double.tryParse(order['total']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(status.toUpperCase(), style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          Text(status.toUpperCase(), style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.bold, fontSize: 13)),
+                          if (order['is_manually_verified'] == true) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.blueGrey.shade100, borderRadius: BorderRadius.circular(4)),
+                              child: const Text("MANUAL", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                            ),
+                          ],
+                        ],
+                      ),
                       Text(_timeAgo(order['createdAt']), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                 ),
+                if (status == 'rejected' && order['rejection_reason'] != null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: Colors.redAccent, size: 14),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text("Reason: ${order['rejection_reason']}", style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600))),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Return to Customer: ₹${(double.tryParse(order['refund_amount']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}",
+                          style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        if (order['is_refunded'] == true) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.check_circle_outline, color: Colors.green, size: 14),
+                                SizedBox(width: 4),
+                                Text("REFUNDED", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              if (order['customer'] != null && 
+                                  order['customer'] is Map && 
+                                  (order['customer']['phone'] != null))
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _callCustomer(order['customer']['phone'].toString()),
+                                    icon: const Icon(Icons.phone, size: 16),
+                                    label: const Text("Call Customer"),
+                                    style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        side: const BorderSide(color: Colors.blue),
+                                        foregroundColor: Colors.blue
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: LoadingButton(
+                                  text: order['razorpay_payment_id'] != null ? "Refund (Razorpay)" : "Mark Refunded",
+                                  height: 40,
+                                  onPressed: () => _handleRefund(order),
+                                  color: Colors.redAccent,
+                                  icon: Icons.refresh_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
               ],
             ),
           );

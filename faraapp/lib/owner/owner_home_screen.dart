@@ -8,6 +8,7 @@ import 'owner_manage_coupons_screen.dart';
 import 'owner_payments_audit_screen.dart';
 import 'owner_record_external_order_screen.dart';
 import '../screens/role_selection_screen.dart';
+import '../widgets/loading_button.dart';
 
 class OwnerHomeScreen extends StatefulWidget {
   const OwnerHomeScreen({super.key});
@@ -21,6 +22,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   static const Color lightOrange = Color(0xFFFFF3EE);
 
   bool _loading = true;
+  bool _syncing = false;
   int _totalOrdersToday = 0;
   double _totalRevenueToday = 0;
   int _pendingOrders = 0;
@@ -56,10 +58,16 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         _pendingOrders = (data['pendingOrders'] ?? 0);
         
         final rawStallStats = data['stallStats'] as List?;
-        _stallStats = rawStallStats?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
+        _stallStats = rawStallStats?.map((e) {
+          if (e is Map) return Map<String, dynamic>.from(e);
+          return <String, dynamic>{};
+        }).toList() ?? [];
 
         final rawRecentOrders = data['recentOrders'] as List?;
-        _recentOrders = rawRecentOrders?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
+        _recentOrders = rawRecentOrders?.map((e) {
+          if (e is Map) return Map<String, dynamic>.from(e);
+          return <String, dynamic>{};
+        }).toList() ?? [];
         
         final rawSourceStats = data['sourceStats'] as Map?;
         if (rawSourceStats != null) {
@@ -81,6 +89,24 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
       debugPrint('Dashboard load error: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _syncData() async {
+    setState(() => _syncing = true);
+    // Simulate a complex sync operation
+    await Future.delayed(const Duration(seconds: 2));
+    await _loadDashboard();
+    if (mounted) {
+      setState(() => _syncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Dashboard data synced successfully"),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     }
   }
 
@@ -289,6 +315,50 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Dashboard Actions ─────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Dashboard Actions",
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                              Icon(Icons.bolt_rounded, color: primaryOrange.withOpacity(0.5), size: 20),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          LoadingButton(
+                            text: "Sync Performance Data",
+                            icon: Icons.sync_rounded,
+                            onPressed: _syncData,
+                            isLoading: _syncing,
+                            color: primaryOrange,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 

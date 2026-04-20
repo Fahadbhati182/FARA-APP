@@ -266,24 +266,80 @@ class _WorkerOrdersScreenState extends State<WorkerOrdersScreen>
   }
 
   void _showRejectConfirm(Map<String, dynamic> order) {
+    final reasonController = TextEditingController();
+    final refund = order['payment_1'] ?? 0;
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Reject Order?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        content: Text(
-          "Reject order of ₹${order['total']?.toStringAsFixed(0) ?? '0'}?\n\nCustomer will be notified and their advance will be refunded.",
-          style: TextStyle(color: Colors.grey.shade600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Reject Order?", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Order of ₹${order['total']?.toStringAsFixed(0) ?? '0'}\nAdvance Received: ₹${refund.toStringAsFixed(0)}",
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            const Text("Reason for rejection:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: "e.g. Out of stock, stall closed...",
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.redAccent, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Customer will be notified and ₹${refund.toStringAsFixed(0)} will be shown as to be returned.",
+                      style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                _showSnack("Please provide a reason", Colors.orange);
+                return;
+              }
               Navigator.pop(context);
-              _updateStatus(order['_id'], {'status': 'rejected'}, "❌ Order rejected. Customer notified.", Colors.redAccent);
+              _updateStatus(
+                order['_id'], 
+                {'status': 'rejected', 'rejection_reason': reason}, 
+                "❌ Order rejected and refund noted.", 
+                Colors.redAccent
+              );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text("Reject", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text("Confirm Rejection", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -292,74 +348,158 @@ class _WorkerOrdersScreenState extends State<WorkerOrdersScreen>
 
   void _showPickupVerification(Map<String, dynamic> order) {
     final codeController = TextEditingController();
+    String? errorMessage;
+    bool resending = false;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 24),
-              const Icon(Icons.qr_code_rounded, color: primaryOrange, size: 36),
-              const SizedBox(height: 16),
-              const Text("Verify Pickup Code", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Text("Ask customer for their 4-digit code", style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-              const SizedBox(height: 24),
-              TextField(
-                controller: codeController,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 12, color: primaryOrange),
-                maxLength: 4,
-                decoration: InputDecoration(
-                  hintText: "CODE",
-                  counterText: '',
-                  filled: true,
-                  fillColor: const Color(0xFFF8F8F8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: ElevatedButton(
-                  onPressed: () {
-                    final entered = codeController.text.trim().toUpperCase();
-                    final correct = order['pickup_code'] as String? ?? '';
-                    if (entered == correct) {
-                      Navigator.pop(context);
-                      _markPickedUp(order);
-                    } else {
-                      _showSnack("❌ Wrong code. Ask customer to check again.", Colors.redAccent);
-                    }
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 24),
+                const Icon(Icons.qr_code_rounded, color: primaryOrange, size: 40),
+                const SizedBox(height: 16),
+                const Text("Verify Pickup Code", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text("Ask customer for their 4-digit code", style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                const SizedBox(height: 24),
+                
+                if (errorMessage != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500))),
+                      ],
+                    ),
+                  ),
+
+                TextField(
+                  controller: codeController,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 12, color: primaryOrange),
+                  maxLength: 4,
+                  onChanged: (_) {
+                    if (errorMessage != null) setSheetState(() => errorMessage = null);
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  child: const Text("VERIFY CODE", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  decoration: InputDecoration(
+                    hintText: "CODE",
+                    counterText: '',
+                    filled: true,
+                    fillColor: const Color(0xFFF8F8F8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final entered = codeController.text.trim().toUpperCase();
+                      final correct = order['pickup_code'] as String? ?? '';
+                      if (entered == correct) {
+                        Navigator.pop(context);
+                        _markPickedUp(order);
+                      } else {
+                        setSheetState(() => errorMessage = "❌ Incorrect code. Please verify again.");
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    child: const Text("VERIFY & PROCEED", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton.icon(
+                      onPressed: resending ? null : () async {
+                        setSheetState(() => resending = true);
+                        try {
+                          await ApiService.resendPickupCode(order['_id']);
+                          setSheetState(() => errorMessage = "✅ Code sent to customer's email!");
+                        } catch (e) {
+                          setSheetState(() => errorMessage = "❌ ${e.toString()}");
+                        } finally {
+                          setSheetState(() => resending = false);
+                        }
+                      },
+                      icon: resending 
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.email_outlined, size: 18),
+                      label: const Text("Send to Email"),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showManualVerifyConfirm(order);
+                      },
+                      icon: const Icon(Icons.admin_panel_settings_outlined, size: 18, color: Colors.grey),
+                      label: const Text("Manual Verify", style: TextStyle(color: Colors.grey)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Future<void> _markPickedUp(Map<String, dynamic> order) async {
+  void _showManualVerifyConfirm(Map<String, dynamic> order) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Manual Verification"),
+        content: const Text("Are you sure you want to verify this order manually? This should only be used if the pickup code/email is unavailable."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _markPickedUp(order, isManual: true);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey),
+            child: const Text("Confirm Manual", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markPickedUp(Map<String, dynamic> order, {bool isManual = false}) async {
     try {
-      await ApiService.updateOrderStatus(order['_id'], {'status': 'picked_up'});
+      await ApiService.updateOrderStatus(order['_id'], {
+        'status': 'picked_up',
+        if (isManual) 'is_manually_verified': true,
+      });
       _loadOrders();
-      _showSnack("✅ Code verified! Collect remaining payment.", Colors.green);
+      _showSnack(
+        isManual 
+          ? "✅ Manually verified! Collect remaining payment." 
+          : "✅ Code verified! Collect remaining payment.", 
+        Colors.green
+      );
       if (mounted) _showCollectPaymentDialog(order);
     } catch (e) {
       _showSnack("Error updating order.", Colors.redAccent);
