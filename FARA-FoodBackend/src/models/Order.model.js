@@ -43,6 +43,23 @@ const orderSchema = new mongoose.Schema(
     pickup_code: {
       type: String,
     },
+    rejection_reason: {
+      type: String,
+    },
+    refund_amount: {
+      type: Number,
+    },
+    is_refunded: {
+      type: Boolean,
+      default: false,
+    },
+    razorpay_refund_id: {
+      type: String,
+    },
+    is_manually_verified: {
+      type: Boolean,
+      default: false,
+    },
     payment_1: {
       type: Number, // Advance payment amount
     },

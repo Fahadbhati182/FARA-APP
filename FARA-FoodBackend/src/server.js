@@ -47,7 +47,7 @@ app.use("/", (req, res) => {
   res.send("Welcome to the FARA Food Delivery API!");
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001;
 const server = http.createServer(app);
 
 // Initialize Socket.io

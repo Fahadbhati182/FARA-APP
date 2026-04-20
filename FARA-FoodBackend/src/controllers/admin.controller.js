@@ -313,7 +313,10 @@ export const getAdminDashboardStats = AsynHandler(async (req, res) => {
     }));
 
     // 5. Recent Orders
-    const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5);
+    const recentOrders = await Order.find()
+      .populate("customer", "name email phone")
+      .sort({ createdAt: -1 })
+      .limit(5);
 
     // 6. Revenue by Source (Today)
     const sourceRevenue = await Order.aggregate([
@@ -398,7 +401,9 @@ export const getAdminAllOrders = AsynHandler(async (req, res) => {
     throw new ApiError(403, "Forbidden: Admin access only");
   }
 
-  const orders = await Order.find().sort({ createdAt: -1 });
+  const orders = await Order.find()
+    .populate("customer", "name email phone")
+    .sort({ createdAt: -1 });
   return res
     .status(200)
     .json(new ApiResponse(200, "All orders fetched", orders));
